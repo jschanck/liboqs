@@ -1,0 +1,54 @@
+Compilation
+-----------
+
+$ cmake -GNinja \
+      -DCMAKE_C_COMPILER=clang \
+      -DBUILD_SHARED_LIBS=ON \
+      -DOQS_USE_OPENSSL=OFF \
+      -DOQS_DIST_BUILD=ON \
+      -DCMAKE_BUILD_TYPE=Debug \
+      -DUSE_SANITIZER=Fuzzer \
+      ..
+$ ninja
+
+You can also use
+  -DUSE_SANITIZER=FuzzerWithASan
+to compile liboqs with address sanitizer.
+Or
+  -DUSE_SANITIZER=FuzzerWithUBSan
+to compile liboqs with undefined behaviour sanitizer.
+
+
+Usage
+-----
+
+From the liboqs directory with a compiled library in ./build:
+
+Make a directory to store coverage data in
+$ mkdir ./coverage/
+
+Pick a fuzz target
+$ ls ./build/tests/fuzz*
+$ export TARGET=fuzz_kem_frodo_640_aes
+
+Or loop over all targets:
+$ for _TARGET in ./build/tests/fuzz*; do
+$ TARGET=$(basename $_TARGET)
+$ mkdir -p ./corpus/${TARGET}/
+$ export LLVM_PROFILE_FILE=./coverage/${TARGET}.profraw
+$ ./build/tests/${TARGET} ./corpus/${TARGET}/ -max_len=2000000 -len_control=0 -runs=1000
+$ done
+
+Note the large value of max_len. We want the fuzzer to provide as many bytes as we
+consume in random oracle answers.
+
+See the libfuzzer guide for description of the other options.
+https://llvm.org/docs/LibFuzzer.html#options
+
+
+Coverage
+--------
+
+$ llvm-profdata merge -sparse ./coverage/*.profraw -o fuzzer.profdata
+$ llvm-cov report ./build/lib/liboqs.so -instr-profile=fuzzer.profdata
+

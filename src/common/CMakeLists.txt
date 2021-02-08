@@ -62,5 +62,10 @@ if(NOT OQS_USE_SHA3_OPENSSL) # using XKCP
     set(_COMMON_OBJS ${_COMMON_OBJS} ${XKCP_LOW_OBJS})
 endif()
 
+# Fuzzer needs visible symbols so it can replace random oracles using LD_PRELOAD
+if(OQS_DEBUG_BUILD AND USE_SANITIZER MATCHES "Fuzzer")
+    set_target_properties(common PROPERTIES C_VISIBILITY_PRESET default)
+endif()
+
 set(_COMMON_OBJS ${_COMMON_OBJS} $<TARGET_OBJECTS:common>)
 set(COMMON_OBJS ${_COMMON_OBJS} PARENT_SCOPE)

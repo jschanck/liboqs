@@ -52,6 +52,7 @@ else()
     set(PYTHON3_EXEC python)
 endif()
 
+
 set(API_TEST_DEPS oqs ${LIBM})
 
 # KEM API tests
@@ -98,6 +99,41 @@ target_link_libraries(speed_sig PRIVATE ${API_TEST_DEPS})
 if(OQS_ENABLE_TEST_CONSTANT_TIME AND NOT OQS_DEBUG_BUILD)
     message(WARNING "OQS_ENABLE_TEST_CONSTANT_TIME is incompatible with CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}.")
     set(OQS_ENABLE_TEST_CONSTANT_TIME OFF)
+endif()
+
+if(OQS_DEBUG_BUILD AND USE_SANITIZER MATCHES "Fuzzer")
+    add_library(oqs_fuzz fuzz/fuzz.c)
+    target_compile_definitions(oqs_fuzz PRIVATE -D_GNU_SOURCE)
+    set_target_properties(oqs_fuzz PROPERTIES C_VISIBILITY_PRESET default)
+
+    # Loop over all of the OQS_ENABLE_KEM_X variables and create a fuzz target for each enabled scheme.
+    get_cmake_property(_vars CACHE_VARIABLES)
+    foreach (_var ${_vars})
+        if(_var MATCHES "^OQS_ENABLE_KEM_[a-z]" AND NOT _var MATCHES "_AVAILABLE$|_avx2$|_avx$|_aesni$")
+            if (${${_var}})
+                string(REPLACE "OQS_ENABLE_KEM_" "" _short_name ${_var})
+                add_executable(fuzz_kem_${_short_name} fuzz_kem.c)
+                target_include_directories(fuzz_kem_${_short_name} PRIVATE fuzz)
+                target_compile_definitions(fuzz_kem_${_short_name} PRIVATE FUZZ_TARGET=OQS_KEM_alg_${_short_name})
+                target_link_libraries(fuzz_kem_${_short_name} PRIVATE dl oqs_fuzz ${API_TEST_DEPS})
+                target_link_options(fuzz_kem_${_short_name} PRIVATE -fsanitize=fuzzer)
+            endif()
+        endif()
+    endforeach()
+
+    # Likewise for signature schemes
+    foreach (_var ${_vars})
+        if(_var MATCHES "^OQS_ENABLE_SIG_[a-z]" AND NOT _var MATCHES "_AVAILABLE$|_avx2$|_avx$|_aesni$")
+            if (${${_var}})
+                string(REPLACE "OQS_ENABLE_SIG_" "" _short_name ${_var})
+                add_executable(fuzz_sig_${_short_name} fuzz_sig.c)
+                target_include_directories(fuzz_sig_${_short_name} PRIVATE fuzz)
+                target_compile_definitions(fuzz_sig_${_short_name} PRIVATE FUZZ_TARGET=OQS_SIG_alg_${_short_name})
+                target_link_libraries(fuzz_sig_${_short_name} PRIVATE dl oqs_fuzz ${API_TEST_DEPS})
+                target_link_options(fuzz_sig_${_short_name} PRIVATE -fsanitize=fuzzer)
+            endif()
+        endif()
+    endforeach()
 endif()
 
 # Record compile options -- from target speed_kem - don't set any options only for speed_kem!
